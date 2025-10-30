@@ -246,27 +246,67 @@ export class ExcelImportService {
         return;
       }
 
-      for (let row = range.s.r; row <= range.e.r; row++) {
-        for (let col = range.s.c; col <= range.e.c; col++) {
+      const headerRow = range.s.r;
+      const linkColumns: number[] = [];
+
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const headerCellAddress = XLSX.utils.encode_cell({ r: headerRow, c: col });
+        const headerCell = sheet[headerCellAddress] as XLSX.CellObject | undefined;
+        const headerValue = this.getCellStringValue(headerCell);
+
+        if (headerValue && headerValue.trim().toLowerCase() === 'link') {
+          linkColumns.push(col);
+        }
+      }
+
+      const columnsToScan = linkColumns.length > 0 ? linkColumns : [...Array(range.e.c - range.s.c + 1).keys()].map(
+        index => range.s.c + index
+      );
+
+      for (let row = headerRow + (linkColumns.length > 0 ? 1 : 0); row <= range.e.r; row++) {
+        for (const col of columnsToScan) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
           const cell = sheet[cellAddress] as XLSX.CellObject | undefined;
-          if (!cell) {
-            continue;
-          }
+          const url = this.getUrlFromCell(cell);
 
-          if (cell.l && cell.l.Target && this.isValidUrl(cell.l.Target)) {
-            urls.push(cell.l.Target.trim());
-          } else if (typeof cell.v === 'string') {
-            const value = cell.v.trim();
-            if (value && this.isValidUrl(value)) {
-              urls.push(value);
-            }
+          if (url) {
+            urls.push(url);
           }
         }
       }
     });
 
     return urls;
+  }
+
+  private static getUrlFromCell(cell: XLSX.CellObject | undefined): string | null {
+    if (!cell) {
+      return null;
+    }
+
+    if (cell.l?.Target && this.isValidUrl(cell.l.Target)) {
+      return cell.l.Target.trim();
+    }
+
+    const value = this.getCellStringValue(cell);
+    if (value && this.isValidUrl(value)) {
+      return value;
+    }
+
+    return null;
+  }
+
+  private static getCellStringValue(cell: XLSX.CellObject | undefined): string | null {
+    if (!cell) {
+      return null;
+    }
+
+    if (typeof cell.v === 'string') {
+      const trimmed = cell.v.trim();
+      return trimmed || null;
+    }
+
+    return null;
   }
 
   private static prepareLinkData(rawUrls: string[], sites: Site[]) {
