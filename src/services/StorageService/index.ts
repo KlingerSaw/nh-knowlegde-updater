@@ -21,7 +21,8 @@ import {
   loadSitemapFromDatabase,
   saveSitemapToDatabase,
   getExistingEntryIdsFromDatabase,
-  loadUnseenEntriesFromDatabase
+  loadUnseenEntriesFromDatabase,
+  loadEntriesByIdsFromDatabase
 } from './database';
 import {
   loadSitesFromLocal,
@@ -30,6 +31,7 @@ import {
   saveEntryToLocal,
   loadSitemapFromLocal,
   loadUnseenEntriesFromLocal,
+  loadEntriesByIdsFromLocal,
   getStorageUsage,
   cleanupLocalStorage
 } from './localStorage';
@@ -205,6 +207,36 @@ export class StorageService {
     } catch (error) {
       console.warn(`Failed to load entries from ${storageType} (${error.message}), falling back to local storage:`, error);
       return await loadEntriesFromLocal(siteUrl, limit, offset);
+    }
+  }
+
+  static async loadEntriesByIds(siteUrl: string, ids: string[]): Promise<Entry[]> {
+    const storageType = getStorageType();
+    console.log(`Loading ${ids.length} entries by ID for ${siteUrl} from ${storageType}`);
+
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      if (isAvailable()) {
+        return await loadEntriesByIdsFromDatabase(siteUrl, ids);
+      }
+
+      return await loadEntriesByIdsFromLocal(siteUrl, ids);
+    } catch (error) {
+      console.warn(`Failed to load entries by IDs from ${storageType}:`, error);
+
+      if (storageType === 'database') {
+        try {
+          return await loadEntriesByIdsFromLocal(siteUrl, ids);
+        } catch (localError) {
+          console.warn('Local storage fallback failed for loadEntriesByIds:', localError);
+          return [];
+        }
+      }
+
+      return [];
     }
   }
 

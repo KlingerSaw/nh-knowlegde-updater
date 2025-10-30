@@ -198,6 +198,19 @@ export async function loadUnseenEntriesFromDatabase(siteUrl: string, limit: numb
   }
 }
 
+export async function loadEntriesByIdsFromDatabase(siteUrl: string, ids: string[]): Promise<Entry[]> {
+  if (!db.isAvailable()) {
+    throw new Error('Database not available');
+  }
+
+  try {
+    return await db.loadEntriesByIds(siteUrl, ids);
+  } catch (error) {
+    console.error('Failed to load entries by IDs from database:', error);
+    throw error;
+  }
+}
+
 export async function saveEntryToDatabase(entry: Entry): Promise<void> {
   if (!db.isAvailable()) {
     throw new Error('Database not available');

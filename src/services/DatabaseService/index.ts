@@ -104,7 +104,7 @@ export class DatabaseService {
 
   async loadEntriesWithLimit(siteUrl: string, limit?: number, offset?: number): Promise<Entry[]> {
     if (!this.entriesRepo) throw new Error('Entries repository not available');
-    
+
     const site = await this.getSiteByUrl(siteUrl);
     if (!site) {
       return [];
@@ -115,9 +115,21 @@ export class DatabaseService {
     return entries.map(entry => ({ ...entry, siteUrl }));
   }
 
+  async loadEntriesByIds(siteUrl: string, ids: string[]): Promise<Entry[]> {
+    if (!this.entriesRepo) throw new Error('Entries repository not available');
+
+    const site = await this.getSiteByUrl(siteUrl);
+    if (!site) {
+      return [];
+    }
+
+    const entries = await this.entriesRepo.loadEntriesByIds(site.id, site.name, ids);
+    return entries.map(entry => ({ ...entry, siteUrl }));
+  }
+
   async loadUnseenEntriesWithLimit(siteUrl: string, limit: number, offset: number): Promise<Entry[]> {
     if (!this.entriesRepo) throw new Error('Entries repository not available');
-    
+
     const site = await this.getSiteByUrl(siteUrl);
     if (!site) {
       return [];

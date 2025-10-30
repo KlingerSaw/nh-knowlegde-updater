@@ -435,6 +435,56 @@ export class EntriesRepository {
     }
   }
 
+  async loadEntriesByIds(siteId: string, siteName: string, ids: string[]): Promise<Entry[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const tableName = getTableName('entries');
+      const uniqueIds = Array.from(new Set(ids));
+      const batchSize = 50;
+      const allEntries: any[] = [];
+
+      for (let i = 0; i < uniqueIds.length; i += batchSize) {
+        const chunk = uniqueIds.slice(i, i + batchSize);
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Load entries by IDs timeout')), 20000);
+        });
+
+        const queryPromise = this.supabase
+          .from(tableName)
+          .select('*')
+          .eq('site_id', siteId)
+          .in('id', chunk);
+
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          allEntries.push(...data);
+        }
+
+        if (i + batchSize < uniqueIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      return this.mapEntriesToDomain(allEntries);
+    } catch (error) {
+      if (error.message && error.message.includes('timeout')) {
+        console.error(`Database query timed out while loading entries for ${siteName}:`, error);
+        throw new Error('Database query timeout while loading entries by IDs');
+      }
+      console.error('Failed to load entries by IDs from database:', error);
+      throw error;
+    }
+  }
+
   private mapEntriesToDomain(data: any[]): Entry[] {
     return data.map(entry => ({
       id: entry.id,
