@@ -1,6 +1,5 @@
 /**
  * HTML cleaning utility functions
- * Based on the original Python script's clean_html_text function
  */
 
 import { decode } from 'html-entities';
