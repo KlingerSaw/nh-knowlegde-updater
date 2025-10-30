@@ -6,7 +6,6 @@ const corsHeaders = {
 
 /**
  * HTML cleaning utility functions
- * Based on the original Python script's clean_html_text function
  */
 class HtmlCleaner {
   private static readonly HTML_ENTITIES: { [key: string]: string } = {
