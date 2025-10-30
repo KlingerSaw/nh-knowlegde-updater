@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Database, HardDrive, Wifi, WifiOff, X } from 'lucide-react';
+import { saveAs } from 'file-saver';
 import { Site, Entry, LogEntry } from './types';
 import { StorageService } from './services/StorageService';
 import { ExportService } from './services/ExportService';
@@ -16,6 +17,8 @@ import { useEntryOperations } from './hooks/useEntryOperations';
 import { useAutoLoad } from './hooks/useAutoLoad';
 import { usePersistentOperations } from './hooks/usePersistentOperations';
 import BackgroundExportModal from './components/BackgroundExportModal';
+import ExcelImportPanel from './components/ExcelImportPanel';
+import { ExcelImportService, ExcelImportProgress, ExcelImportSummary } from './services/ExcelImportService';
 
 function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -69,6 +72,10 @@ function App() {
   });
   const [showBackgroundExportModal, setShowBackgroundExportModal] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const [isExcelProcessing, setIsExcelProcessing] = useState(false);
+  const [excelProgress, setExcelProgress] = useState<ExcelImportProgress | null>(null);
+  const [excelSummary, setExcelSummary] = useState<ExcelImportSummary | null>(null);
 
   // Add state for persistent fetch progress display
   const [persistentFetchProgress, setPersistentFetchProgress] = useState<{
@@ -242,6 +249,78 @@ function App() {
     // Export is handled directly in the modal component
   };
 
+  const handleExcelImport = async (file: File) => {
+    if (sites.length === 0) {
+      addLog('Cannot import Excel file without configured sites', 'warning');
+      return;
+    }
+
+    setIsExcelProcessing(true);
+    setExcelProgress(null);
+    setExcelSummary(null);
+    addLog(`Starting Excel import for ${file.name}`, 'info');
+
+    try {
+      const result = await ExcelImportService.processFile(file, sites, progress => {
+        setExcelProgress(progress);
+      });
+
+      saveAs(result.zipBlob, result.zipFileName);
+      setExcelSummary(result.summary);
+      addLog(
+        `Excel import complete: ${result.summary.processedEntries} entries bundled, ${result.summary.newEntriesSaved} new saved`,
+        'success'
+      );
+
+      const processedSiteIds = new Set(result.summary.siteSummaries.map(site => site.siteId));
+
+      if (processedSiteIds.size > 0) {
+        const updatedSites = await Promise.all(sites.map(async site => {
+          if (!processedSiteIds.has(site.id)) {
+            return site;
+          }
+
+          try {
+            const entryCount = await StorageService.getActualEntryCount(site.url);
+            return {
+              ...site,
+              entryCount,
+              lastUpdated: new Date()
+            };
+          } catch (error) {
+            addLog(`Failed to refresh entry count for ${site.name}: ${error.message}`, 'warning');
+            return site;
+          }
+        }));
+
+        setSites(updatedSites);
+
+        try {
+          await StorageService.saveSites(updatedSites);
+        } catch (error) {
+          addLog(`Unable to persist site updates after Excel import: ${error.message}`, 'warning');
+        }
+
+        setNewEntriesCount(prev => {
+          const next = { ...prev };
+          processedSiteIds.forEach(id => {
+            next[id] = 0;
+          });
+          return next;
+        });
+
+        if (selectedSite && processedSiteIds.has(selectedSite.id)) {
+          await loadEntries(selectedSite.url);
+        }
+      }
+    } catch (error) {
+      addLog(`Excel import failed: ${error.message}`, 'error');
+    } finally {
+      setIsExcelProcessing(false);
+      setExcelProgress(null);
+    }
+  };
+
   const storageType = StorageService.getStorageType();
 
   // Show loading screen during initialization
@@ -350,6 +429,13 @@ function App() {
         </div>
 
         <div className="flex-1 flex flex-col">
+          <ExcelImportPanel
+            isProcessing={isExcelProcessing}
+            onUpload={handleExcelImport}
+            progress={excelProgress}
+            summary={excelSummary}
+            hasSites={sites.length > 0}
+          />
           <PreviewPanel
             entry={selectedEntry}
             onMarkAsSeen={entryOperations.handleMarkAsSeen}

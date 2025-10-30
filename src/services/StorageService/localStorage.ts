@@ -46,13 +46,23 @@ export async function loadEntriesFromLocal(siteUrl: string, limit?: number, offs
 
 export async function loadAllEntriesFromLocal(sites: Site[]): Promise<Entry[]> {
   const allEntries: Entry[] = [];
-  
+
   for (const site of sites) {
     const siteEntries = await loadEntriesFromLocal(site.url);
     allEntries.push(...siteEntries);
   }
-  
+
   return allEntries;
+}
+
+export async function loadEntriesByIdsFromLocal(siteUrl: string, ids: string[]): Promise<Entry[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const entries = await loadEntriesFromLocal(siteUrl);
+  const idSet = new Set(ids);
+  return entries.filter(entry => idSet.has(entry.id));
 }
 
 export async function loadUnseenEntriesFromLocal(siteUrl: string, limit: number, offset: number, recentOnly: boolean = false): Promise<Entry[]> {
