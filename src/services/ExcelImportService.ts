@@ -455,8 +455,18 @@ export class ExcelImportService {
   private static async createZip(entries: Entry[]): Promise<Blob> {
     const zip = new JSZip();
 
+    const fileNameCounts = new Map<string, number>();
+
     entries.forEach(entry => {
-      const fileName = `${this.sanitizeFileName(this.getSiteIdentifier(entry.siteUrl))}_${this.sanitizeFileName(entry.id)}.txt`;
+      const baseName = this.sanitizeFileName(entry.id) || 'entry';
+      const initialFileName = `${baseName}.txt`;
+
+      const duplicateCount = fileNameCounts.get(initialFileName) ?? 0;
+      const fileName =
+        duplicateCount === 0 ? initialFileName : `${baseName}_${duplicateCount + 1}.txt`;
+
+      fileNameCounts.set(initialFileName, duplicateCount + 1);
+
       zip.file(fileName, this.formatEntryContent(entry));
     });
 
@@ -465,19 +475,6 @@ export class ExcelImportService {
       compression: 'DEFLATE',
       compressionOptions: { level: 1 }
     });
-  }
-
-  private static getSiteIdentifier(siteUrl?: string): string {
-    if (!siteUrl) {
-      return 'unknown_site';
-    }
-
-    try {
-      const url = new URL(siteUrl);
-      return url.hostname || 'unknown_site';
-    } catch {
-      return 'unknown_site';
-    }
   }
 
   private static formatEntryContent(entry: Entry): string {
